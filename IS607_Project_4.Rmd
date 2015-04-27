@@ -1,0 +1,283 @@
+---
+title: "IS607 - Project 4"
+author: "Derek G. Nokes"
+date: "Saturday, April 25, 2015"
+output: pdf_document
+---
+
+## Introduction
+
+The **rvest** package - created by Hadley Wickham - can be used to efficiently scrape data from html web pages in a way similar to that of the well-known Python package, Beautiful Soup.
+
+```{r,warning=FALSE,error=FALSE}
+# load the rvest package
+library(rvest)
+```
+
+In this project, we use rvest to extract key data about the blog entries on the r-bloggers website relating to web scraping. 
+
+## Returning Search Results for the First Page
+
+If we search the r-bloggers site for 'Web Scraping', search results are returned to the following URL:
+
+```{r}
+# set the URL
+urlString<-'http://www.r-bloggers.com/search/web%20scraping'
+```
+
+We can parse the results of this URL as follows:
+
+```{r}
+# parse the URL
+htmlSession <- html(urlString)
+```
+
+For each reference blog entry on the first page, we extract the title, date, and author:
+
+```{r}
+
+# extract the titles
+titles <- htmlSession %>% 
+  html() %>% 
+  html_nodes("#leftcontent h2 a") %>% 
+  html_text()
+
+# extract the dates
+dates <- htmlSession %>% 
+  html() %>% 
+  html_nodes("#leftcontent .meta .date") %>% 
+  html_text()
+
+# convert dates to POSIX
+datesPOSIX<-strptime(dates, "%B %d, %y")
+
+# extract the authors
+authors <-  htmlSession %>% 
+  html() %>% 
+  html_nodes("#leftcontent .meta a") %>% 
+  html_text()
+```
+
+We now create a data frame to store the results:
+
+```{r}
+# create the data frame
+webScraping<-data.frame(title=titles,date=datesPOSIX,author=authors)
+```
+
+The results are displayed in the following table:
+
+```{r}
+# create the table
+knitr::kable(webScraping, caption = 'Results for a First Page')
+```
+
+We can create a simple function to extract the results for a particular URL string:
+
+```{r}
+fetchWebScrapingResults<-function(urlString){
+  # parse the HTML page
+  htmlSession <- html(urlString)
+  
+  # extract the titles
+  titles <- htmlSession %>% 
+    html() %>% 
+    html_nodes("#leftcontent h2 a") %>% 
+    html_text()
+
+  # clean leading and trailing whitespace
+  titles<-gsub("^\\s+|\\s+$", "", titles)  
+  
+  # extract the dates
+  dates <- htmlSession %>% 
+    html() %>% 
+    html_nodes("#leftcontent .meta .date") %>% 
+    html_text()
+
+  # convert dates to POSIX
+  datesPOSIX<-strptime(dates, "%B %d, %y")
+
+  # extract the authors
+  authors <-  htmlSession %>% 
+    html() %>% 
+    html_nodes("#leftcontent .meta a") %>% 
+    html_text()  
+
+  # create the data frame
+  webScraping<-data.frame(title=titles,date=datesPOSIX,
+                          author=authors,stringsAsFactors=FALSE)
+  webScraping
+}
+```
+
+## Returning Search Results for all Pages
+
+A simple function can be created to extend the base code above to return all of the relevant results for all pages of the search results as follows:
+
+```{r}
+fetchAllWebScrapingResults<-function(urlString){
+  # parse the HTML page
+  htmlSession <- html(urlString)
+  
+  # fetch the number of pages
+  pages <- as.numeric(strsplit(htmlSession %>% 
+    html_nodes(".pages") %>%
+    html_text(),"of ")[[1]][2])  
+  
+  # fetch the results of the first page
+  # extract the titles
+  titles <- htmlSession %>% 
+    html() %>% 
+    html_nodes("#leftcontent h2 a") %>% 
+    html_text()
+
+  # clean leading and trailing whitespace
+  titles<-gsub("^\\s+|\\s+$", "", titles)  
+  
+  # extract the dates
+  dates <- htmlSession %>% 
+    html() %>% 
+    html_nodes("#leftcontent .meta .date") %>% 
+    html_text()
+
+  # convert dates to POSIX
+  datesPOSIX<-strptime(dates, "%B %d, %y")
+
+  # extract the authors
+  authors <-  htmlSession %>% 
+    html() %>% 
+    html_nodes("#leftcontent .meta a") %>% 
+    html_text()  
+
+  # create the data frame
+  webScraping<-data.frame(title=titles,date=datesPOSIX,
+                          author=authors,stringsAsFactors=FALSE)
+  # pause
+  Sys.sleep(1)
+  
+  # iterate over the remaining pages scraping results
+  for(page in 2:pages){
+    
+    baseUrlString<-paste0(urlString,'/page/',sep="")
+    
+    # create the url for page
+    nextUrlString <- paste0(baseUrlString,page,"/",sep="")
+    
+    # extract the results for the url
+    nextWebScraping<-fetchWebScrapingResults(nextUrlString)
+    
+    # merge the data frames  
+    webScraping<-rbind(webScraping,nextWebScraping)
+    
+    # pause before the next iteration
+    Sys.sleep(1)
+    
+    }
+webScraping  
+}
+```
+
+We call the function to get our results:
+
+```{r}
+# call our function
+webScraping<-fetchAllWebScrapingResults(urlString)
+```
+
+The results are displayed in the following table:
+
+```{r}
+# create the table
+knitr::kable(webScraping, caption = 'Results for All Pages')
+```
+
+## Generalizing R-Bloggers Search
+
+We can extend the function so that any search can be conducted.
+
+```{r}
+searchRBloggers<-function(searchString){
+
+  # create spaces with %20
+  searchString <- gsub(" ", "%20", searchString)  
+
+  # create the URL
+  urlString <- paste0("http://www.r-bloggers.com/search/",searchString,sep="")  
+
+  # parse the HTML page
+  htmlSession <- html(urlString)
+  
+  # fetch the number of pages
+  pages <- as.numeric(strsplit(htmlSession %>% 
+    html_nodes(".pages") %>%
+    html_text(),"of ")[[1]][2])  
+  
+  # fetch the results of the first page
+  # extract the titles
+  titles <- htmlSession %>% 
+    html() %>% 
+    html_nodes("#leftcontent h2 a") %>% 
+    html_text()
+
+  # clean leading and trailing whitespace
+  titles<-gsub("^\\s+|\\s+$", "", titles)  
+  
+  # extract the dates
+  dates <- htmlSession %>% 
+    html() %>% 
+    html_nodes("#leftcontent .meta .date") %>% 
+    html_text()
+
+  # convert dates to POSIX
+  datesPOSIX<-strptime(dates, "%B %d, %y")
+
+  # extract the authors
+  authors <-  htmlSession %>% 
+    html() %>% 
+    html_nodes("#leftcontent .meta a") %>% 
+    html_text()  
+
+  # create the data frame
+  webScraping<-data.frame(title=titles,date=datesPOSIX,
+                          author=authors,stringsAsFactors=FALSE)
+  # pause
+  Sys.sleep(1)
+  
+  # iterate over the remaining pages scraping results
+  for(page in 2:pages){
+    
+    baseUrlString<-paste0(urlString,'/page/',sep="")
+    
+    # create the url for page
+    nextUrlString <- paste0(baseUrlString,page,"/",sep="")
+    
+    # extract the results for the url
+    nextWebScraping<-fetchWebScrapingResults(nextUrlString)
+    
+    # merge the data frames  
+    webScraping<-rbind(webScraping,nextWebScraping)
+    
+    # pause before the next iteration
+    Sys.sleep(1)
+    
+    }
+webScraping  
+}
+```
+
+We can use our generic function to search for entries about the quantmod library on R-Bloggers as follows:
+
+```{r}
+searchString<-'quantmod'
+searchResults<-searchRBloggers(searchString)  
+```
+
+The results are displayed in the following table:
+
+```{r}
+knitr::kable(searchResults, caption = 'Search Results for Quantmod')
+```
+
+## Further Potential Enhancements
+
+Occasionally our function extracts data that is not 'well-formed'. A more sophisticated approach could be developed to clean these badly formed records.
